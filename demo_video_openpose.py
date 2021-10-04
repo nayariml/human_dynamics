@@ -1,6 +1,6 @@
 """
 Runs hmmr on a video.
-Extracts tracks using AlphaPose/PoseFlow
+Extracts 2D using OpenPose
 
 Sample Usage:
 python -m demo_video --out_dir demo_data/output
@@ -35,6 +35,7 @@ from src.evaluation.tester import Tester
 from src.util.common import mkdir
 from src.util.smooth_bbox import get_smooth_bbox_params
 
+
 flags.DEFINE_string(
     'vid_path', 'penn_action-2278.mp4',
     'video to run on')
@@ -62,81 +63,95 @@ flags.DEFINE_boolean(
     'encoder doesn\'t see full fov.'
 )
 
+def read_json(json_path): #Openpose
+    with open(json_path) as f1:
+        data = json.load(f1)
+    kps = []
+    for people in data['people']:
+        kp = np.array(people['pose_keypoints_2d']).reshape(-1, 3)
+        kps.append(kp)
+    return kps
 
-def get_labels_poseflow(json_path, num_frames, min_kp_count=20):
+
+def get_labels(json_path, num_frames, track_id, min_kp_count=20):
     """
-    Returns the poses for each person tracklet.
-
-    Each pose has dimension num_kp x 3 (x,y,vis) if the person is visible in the
-    current frame. Otherwise, the pose will be None.
-
     Args:
-        json_path (str): Path to the json output from AlphaPose/PoseTrack.
+        json_path (str): Path to the json output from OpenPose.
         num_frames (int): Number of frames.
         min_kp_count (int): Minimum threshold length for a tracklet.
-
     Returns:
         List of length num_people. Each element in the list is another list of
         length num_frames containing the poses for each person.
     """
-    with open(json_path, 'r') as f:
-        data = json.load(f)
-    if len(data.keys()) != num_frames:
-        print('Not all frames have people detected in it.')
-        frame_ids = [int(re.findall(r'\d+', img_name)[0])
-                     for img_name in sorted(data.keys())]
-        if frame_ids[0] != 0:
-            print('PoseFlow did not find people in the first frame. '
-                  'Needs testing.')
-            ipdb.set_trace()
+    print('reading %s' % json_path)
+    # Opens json, smoothes the output
+    json_paths = sorted(glob(osp.join(json_path, "*.json")))
 
-    all_kps_dict = {}
-    all_kps_count = {}
-    for i, key in enumerate(sorted(data.keys())):
-        # People who are visible in this frame.
-        track_ids = []
-        for person in data[key]:
-            kps = np.array(person['keypoints']).reshape(-1, 3)
-            idx = int(person['idx'])
-            if idx not in all_kps_dict.keys():
-                # If this is the first time, fill up until now with None
-                all_kps_dict[idx] = [None] * i
-                all_kps_count[idx] = 0
-            # Save these kps.
-            all_kps_dict[idx].append(kps)
-            track_ids.append(idx)
-            all_kps_count[idx] += 1
-        # If any person seen in the past is missing in this frame, add None.
-        for idx in set(all_kps_dict.keys()).difference(track_ids):
-            all_kps_dict[idx].append(None)
+    if len(json_paths) != num_frames:
+        print('Not all frames were detected.')
+        ipdb.set_trace()
 
-    all_kps_list = []
-    all_counts_list = []
-    for k in all_kps_dict:
-        if all_kps_count[k] >= min_kp_count:
-            all_kps_list.append(all_kps_dict[k])
-            all_counts_list.append(all_kps_count[k])
+    all_kps = []
+    for i, json_path in enumerate(json_paths):
+        kps = read_json(json_path)
+        all_kps.append(kps)
 
-    # Sort it by the length so longest is first:
-    sort_idx = np.argsort(all_counts_list)[::-1]
-    all_kps_list_sorted = []
-    for sort_id in sort_idx:
-        all_kps_list_sorted.append(all_kps_list[sort_id])
+    pVis = []; counts_list = []; nbox = []
+    count = 0
+    for fls in all_kps:
+        for ps in fls:
+            vis = ps[:, 2] > 0 #For all the positions (x, y) > 0 = True
+            if np.sum(vis) >= min_kp_count: #Count if the sum of points are more than min acceptable
+                pVis.append(ps)
+                counts_list.append(len(pVis))
 
-    return all_kps_list_sorted
+        sort_idx = np.argsort(counts_list)[::-1]
+        kps_list_sorted = []
+        for sort_id in sort_idx:
+            kps_list_sorted.append(pVis[sort_id])
+
+        count += 1
+
+        """
+        if len(kps_list_sorted) < 1:
+            print('OpenPose - Person does not have the minimum points on the frame nº - ', count - 1)
+            ipdb.set_trace() #Break in the first occurrence
+        else:
+            track_id = min(track_id, len(kps_list_sorted) - 1)
+            kps = kps_list_sorted[track_id]
+            newbox.append(kps)
+        all_kps = newbox"""
+
+        if len(kps_list_sorted) < 1:
+            print('OpenPose - Person does not have the minimum points on the frame nº - ', count - 1)
+            ipdb.set_trace() #Break in the first occurrence
+
+        track_id = min(track_id, len(kps_list_sorted) - 1)
+        kps = kps_list_sorted[track_id]
+        nbox.append(kps)
+    all_kps = nbox
+
+    print('Len OpenPose kps', len(all_kps), '\n')
+
+    if len(all_kps) != num_frames:
+        print('Not all frames were detected.')
+        ipdb.set_trace()
+
+    return all_kps
 
 
-def predict_on_tracks(model, img_dir, poseflow_path, output_path, track_id,
+def predict_on_tracks(model, img_dir, json_path, output_path, track_id,
                       trim_length):
-    # Get all the images
+    # Get all the images video_frames
     im_paths = sorted(glob(osp.join(img_dir, '*.png')))
-    all_kps = get_labels_poseflow(poseflow_path, len(im_paths))
+    # Get all the images of openpose
+    im_paths_open = sorted(glob(osp.join(json_path, '*.jpg')))
+    #Get all the kps
+    kps = get_labels(json_path, len(im_paths_open), track_id)
 
     # Here we set which track to use.
-    track_id = min(track_id, len(all_kps) - 1)
-    print('Total number of PoseFlow tracks:', len(all_kps))
-    print('Processing track_id:', track_id)
-    kps = all_kps[track_id]
+    #track_id = min(track_id, len(all_kps) - 1)
+    #kps = all_kps[track_id]
 
     bbox_params_smooth, s, e = get_smooth_bbox_params(kps, vis_thresh=0.1)
 
@@ -170,7 +185,7 @@ def predict_on_tracks(model, img_dir, poseflow_path, output_path, track_id,
     myjson_path2 = osp.join(myjson_dir, 'poses_rot_output.json')
     mkdir(myjson_dir)
 
-    print('myjson_dir', myjson_dir)
+    #print('myjson_dir', myjson_dir)
 
 
     pred_path = osp.join(output_path, 'hmmr_output.pkl')
@@ -186,17 +201,11 @@ def predict_on_tracks(model, img_dir, poseflow_path, output_path, track_id,
         print('Running prediction.')
         print('----------')
 
-        preds = model.predict_all_images(images) #extract prediction --> src/evolution/tester.py
+        preds = model.predict_all_images(images) #extract prediction --> tester.py
 
         """
         # Predictions.
-        'cams' + suffix: omegas.get_cams(),
-        'joints' + suffix: omegas.get_joints(),
-        'kps' + suffix: omegas.get_kps(),
-        'poses' + suffix: omegas.get_poses_rot(),
-        'shapes' + suffix: omegas.get_shapes(),
-        'verts' + suffix: omegas.get_verts(),
-        'omegas' + suffix: omegas.get_raw()
+        'cams', 'joints', 'kps', 'poses', shapes', 'verts', 'omegas'
 
         cams is 3D [s, tx, ty], numpy/cuda torch Variable or B x 3
         cams: N x 3, predicted camera
@@ -285,7 +294,7 @@ def predict_on_tracks(model, img_dir, poseflow_path, output_path, track_id,
     )
 
 
-def run_on_video(model, vid_path, trim_length):
+def run_on_video(model, vid_path, trim_length, openpose):
     """
     Main driver.
     First extracts alphapose/posetrack in track_dir
@@ -296,16 +305,17 @@ def run_on_video(model, vid_path, trim_length):
     print('----------')
 
     # See extract_tracks.py
-    openpose = False #to use as True, please use demo_video_openpose.py
-    poseflow_path, img_dir = compute_tracks(vid_path, config.track_dir, openpose)
+    #poseflow_path, img_dir = compute_tracks(vid_path, config.track_dir)
+
+    json_path, img_dir = compute_tracks(vid_path, config.track_dir, openpose)
 
     vid_name = osp.basename(vid_path).split('.')[0]
-    out_dir = osp.join(config.out_dir, vid_name, 'hmmr_output')
+    out_dir = osp.join(config.out_dir, vid_name, 'hmmr_output_openpose')
 
     predict_on_tracks(
         model=model,
         img_dir=img_dir,
-        poseflow_path=poseflow_path,
+        json_path=json_path,
         output_path=out_dir,
         track_id=config.track_id,
         trim_length=trim_length
@@ -321,14 +331,14 @@ def main(model):
     else:
         trim_length = 0
 
-
+    openpose = True
 
     if config.vid_dir:
         vid_paths = sorted(glob(config.vid_dir + '/*.mp4'))
         for vid_path in vid_paths:
-            run_on_video(model, vid_path, trim_length)
+            run_on_video(model, vid_path, trim_length, openpose)
     else:
-        run_on_video(model, config.vid_path, trim_length)
+        run_on_video(model, config.vid_path, trim_length, openpose)
 
 
 if __name__ == '__main__':

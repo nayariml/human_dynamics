@@ -59,6 +59,42 @@ def dump_frames(vid_path, out_dir):
     print(' '.join(cmd))
     subprocess.call(cmd)
 
+def run_openpose(vid_path, out_dir):
+
+    if osp.exists(osp.join(out_dir, '*.json')):
+        print('Per-frame detection OpenPose: done!')
+        return
+
+    if not osp.exists(vid_path):
+        print('%s doesnt exist' % vid_path)
+        import ipdb
+        ipdb.set_trace()
+
+    if not osp.exists(out_dir):
+        print('Making %s' % out_dir)
+        makedirs(out_dir)
+
+    print('----------')
+    print('Computing per-frame results with AlphaPose')
+
+    openpose_dir = '/home/nayari/openpose'
+    cmd_base = '%s/build/examples/openpose/openpose.bin --video %%s --write_json %%s --scale_gap 0.25 --write_images %%s --write_images_format jpg' % (openpose_dir)
+
+    curr_dir = os.getcwd()
+    video_path = curr_dir + '/' + vid_path
+    cmd = cmd_base % (video_path, out_dir, out_dir)
+
+    #print('Running: {}'.format(' '.join(cmd)))
+
+    #os.chdir('src/external/AlphaPose')
+    ret = subprocess.call(cmd)
+    if ret != 0:
+        print('Issue running openpose. Please make sure you can run the above '
+              'command from the commandline.')
+        exit(ret)
+    os.chdir(curr_dir)
+    print('OpenPose successfully ran!')
+    print('----------')
 
 def run_alphapose(img_dir, out_dir):
     if osp.exists(osp.join(out_dir, 'alphapose-results.json')):
@@ -124,7 +160,7 @@ def run_poseflow(img_dir, out_dir):
     return out_json
 
 
-def compute_tracks(vid_path, out_dir):
+def compute_tracks(vid_path, out_dir, OpenPose):
     """
     This script basically:
     1. Extracts individual frames from mp4 since PoseFlow requires per frame
@@ -138,17 +174,29 @@ def compute_tracks(vid_path, out_dir):
     vid_dir = osp.abspath(osp.join(out_dir, vid_name))
     img_dir = osp.abspath(osp.join(vid_dir, 'video_frames'))
     res_dir = osp.abspath(osp.join(vid_dir, 'AlphaPose_output'))
+    res_dir_openpose =  osp.abspath(osp.join(vid_dir, 'OpenPose_output'))
 
     mkdir(img_dir)
-    mkdir(res_dir)
+
 
     dump_frames(vid_path, img_dir)
 
-    run_alphapose(img_dir, res_dir)
+    if OpenPose:
 
-    track_json = run_poseflow(img_dir, res_dir)
-    return track_json, img_dir
+        #mkdir(res_dir_openpose)
 
+        #run_openpose(vid_path, res_dir_openpose)
+
+        openpose_json = res_dir_openpose
+
+        return openpose_json, img_dir
+
+    else:
+
+        mkdir(res_dir)
+        run_alphapose(img_dir, res_dir)
+        track_json = run_poseflow(img_dir, res_dir)
+        return track_json, img_dir
 
 def main(opts):
     # Make output directory.
