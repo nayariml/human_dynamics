@@ -151,7 +151,9 @@ class VisRenderer(object):
         else:
             rend = self.renderer.render(proj_verts, faces, texture)
 
+        rend = rend[0]
         rend = rend.data.cpu().numpy().transpose((0, 2, 3, 1))
+
         rend = np.clip(rend, 0, 1) * 255.0
 
         if num_batch == 1:
