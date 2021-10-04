@@ -356,7 +356,7 @@ def main(config):
     print('-' * 20)
     print('Evaluating {}'.format(config.load_path))
 
-    json_path = get_result_path_name(
+    json_path = get_result_patload_pathh_name(
         split=config.split,
         load_path=config.load_path,
         pred_mode=config.pred_mode,

@@ -124,10 +124,11 @@ def render_preds(output_path, config, preds, images, images_orig, trim_length,
     # If model doesn't fit in GPU, reduce max_img_size or GPU fraction in Tester
     max_img_size = 720
 
-    output_crop = output_path + '_crop'
+    output_crop = output_path + '/video_out'
+    output_crop_image = output_crop + '/hmmr_output_crop'
     # Final videos
-    vid_path = output_path + '.mp4'
-    vid_path_crop = output_crop + '.mp4'
+    vid_path = output_crop + '/hmmr_output.mp4'
+    vid_path_crop = output_crop_image + '/hmmr_output_crop.mp4'
 
     if os.path.exists(vid_path):
         print('Video already exists!')
@@ -137,6 +138,8 @@ def render_preds(output_path, config, preds, images, images_orig, trim_length,
         os.mkdir(output_path)
     if not os.path.exists(output_crop):
         os.mkdir(output_crop)
+    if not os.path.exists(output_crop_image):
+        os.mkdir(output_crop_image)
 
     for j in tqdm(range(trim_length, len(preds['kps']) - trim_length)):
         image = images[j]
@@ -161,7 +164,7 @@ def render_preds(output_path, config, preds, images, images_orig, trim_length,
             rotated_view=True,
         )
         plt.imsave(
-            fname=os.path.join(output_path,
+            fname=os.path.join(output_crop,
                                'frame{:06d}.png'.format(j - trim_length)),
             arr=render_og,
         )
@@ -191,15 +194,15 @@ def render_preds(output_path, config, preds, images, images_orig, trim_length,
         ))
 
         plt.imsave(
-            fname=os.path.join(output_crop,
+            fname=os.path.join(output_crop_image,
                                'frame{:06d}.png'.format(j - trim_length)),
             arr=rendered_crop,
         )
 
     print('Converting them to video..')
 
-    make_video(vid_path, output_path)
-    make_video(vid_path_crop, output_crop)
+    make_video(vid_path, output_crop)
+    make_video(vid_path_crop, output_crop_image)
 
 
 def make_video(output_path, img_dir, fps=25):
@@ -231,4 +234,3 @@ def make_video(output_path, img_dir, fps=25):
         except OSError:
             ipdb.set_trace()
             print('OSError')
-

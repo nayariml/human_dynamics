@@ -7,7 +7,12 @@ import os
 import deepdish as dd
 import ipdb
 import numpy as np
-import tensorflow as tf
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
+from tf_slim import get_variables
+
 from tqdm import tqdm
 
 from src.evaluation.eval_util import update_dict_entries
@@ -161,7 +166,8 @@ class Tester(object):
         )
 
     def update_encoder_vars(self):
-        trainable_vars = tf.contrib.framework.get_variables()
+        #trainable_vars = tf.contrib.framework.get_variables()
+        trainable_vars = get_variables()
         trainable_vars_e = [var for var in trainable_vars
                             if var.name[:2] != 'D_']
         self.encoder_vars.extend(trainable_vars_e)
