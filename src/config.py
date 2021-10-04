@@ -48,7 +48,7 @@ flags.DEFINE_list('delta_t_values', ['-5', '5'], 'Amount of time to jump by.')
 
 # For training.
 flags.DEFINE_string('data_dir', None, 'Where tfrecords are saved')
-flags.DEFINE_string('log_dir', 'logs', 'Where to save training models')
+#flags.DEFINE_string('log_dir', 'logs', 'Where to save training models')
 flags.DEFINE_string('model_dir', None,
                     'Where model will be saved -- filled automatically')
 flags.DEFINE_list('datasets', ['h36m', 'penn_action', 'insta_variety'],
@@ -234,7 +234,7 @@ def prepare_dirs(config, prefix=[]):
             postfix.append('lw-pose{:g}'.format(config.e_lw_pose))
         if config.e_lw_hallucinate != 1:
             postfix.append('lw-hall{:g}'.format(config.e_lw_pose))
-            
+
 
         if config.d_lr != 1e-4:
             postfix.append('Dlr{:g}' % config.d_lr)
