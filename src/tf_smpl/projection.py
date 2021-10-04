@@ -10,8 +10,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 def batch_orth_proj_idrot(X, camera, name=None):
     """
@@ -100,5 +101,5 @@ def procrustes2d_vis(X, X_target):
         trans = tf.squeeze(mu2) / scale - tf.squeeze(mu1)
 
         best_cam = tf.concat([scale, trans], 1)
-        
+
         return best_cam

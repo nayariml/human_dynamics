@@ -9,8 +9,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 def batch_skew(vec, batch_size=None):
     """
@@ -18,7 +19,7 @@ def batch_skew(vec, batch_size=None):
 
     returns N x 3 x 3. Skew_sym version of each matrix.
     """
-    with tf.name_scope("batch_skew", [vec]):
+    with tf.name_scope("batch_skew", values=[vec]):
         if batch_size is None:
             batch_size = vec.shape.as_list()[0]
         col_inds = tf.constant([1, 2, 3, 5, 6, 7])
@@ -43,6 +44,7 @@ def batch_rodrigues(theta, name=None):
     """
     Theta is N x 3
     """
+
     with tf.name_scope(name, "batch_rodrigues", [theta]):
         batch_size = theta.shape.as_list()[0]
         angle = tf.expand_dims(tf.norm(theta + 1e-8, axis=1), -1)
@@ -146,7 +148,7 @@ def batch_global_rigid_transformation(Rs, Js, parent, rotate_base=False):
       new_J : `Tensor`: N x 24 x 3 location of absolute joints
       A     : `Tensor`: N x 24 4 x 4 relative joint transformations for LBS.
     """
-    with tf.name_scope("batch_forward_kinematics", [Rs, Js]):
+    with tf.name_scope("batch_forward_kinematics", values=[Rs, Js]):
         N = Rs.shape[0].value
         if rotate_base:
             print('Flipping the SMPL coordinate frame!!!!')

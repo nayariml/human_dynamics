@@ -14,7 +14,10 @@ import ipdb
 import numpy as np
 import pickle
 
-import tensorflow as tf
+#import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
+
 from .batch_lbs import batch_rodrigues, batch_global_rigid_transformation
 
 
@@ -37,8 +40,10 @@ class SMPL(object):
             name='v_template',
             dtype=dtype,
             trainable=False)
+
         # Size of mesh [Number of vertices, 3]
-        self.size = [self.v_template.shape[0].value, 3]
+        #self.size = [self.v_template.shape[0].value, 3]
+        self.size = [self.v_template.shape[0], 3]
         self.num_betas = dd['shapedirs'].shape[-1]
         # Shape blend shape basis: 6980 x 3 x 10
         # reshaped to 6980*30 x 10, transposed to 10x6980*3
@@ -139,11 +144,11 @@ class SMPL(object):
             # 5. Do skinning:
             # W is N x 6890 x 24
             W = tf.reshape(
-                tf.tile(self.weights, [num_batch, 1]), [num_batch, -1, 24])
+                tf.tile(self.weights, [num_batch, 1]), [num_batch, -1, 24]) #the transformation weights for each joint
             # (N x 6890 x 24) x (N x 24 x 16)
             T = tf.reshape(
                 tf.matmul(W, tf.reshape(A, [num_batch, 24, 16])),
-                [num_batch, -1, 4, 4])
+                [num_batch, -1, 4, 4]) # the final transformation for each joint
             v_posed_homo = tf.concat(
                 [v_posed, tf.ones([num_batch, v_posed.shape[1], 1])], 2)
             v_homo = tf.matmul(T, tf.expand_dims(v_posed_homo, -1))
